@@ -2,33 +2,58 @@ import { useState, useEffect, useCallback } from 'react';
 import type { Transaction, MonthlySummary, Budget, BudgetStatus } from '../types';
 import { TransactionType } from '../types';
 
-export const useFinanceData = () => {
+export const useFinanceData = (userId: string | null) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
 
+  const getStorageKey = useCallback((key: string) => {
+    if (!userId) return null;
+    return `${key}_${userId}`;
+  }, [userId]);
+
   useEffect(() => {
+    if (!userId) {
+      setTransactions([]);
+      setBudgets([]);
+      return;
+    }
     try {
-      const storedTransactions = localStorage.getItem('transactions');
-      if (storedTransactions) {
-        setTransactions(JSON.parse(storedTransactions));
+      const transactionsKey = getStorageKey('transactions');
+      const budgetsKey = getStorageKey('budgets');
+
+      if(transactionsKey) {
+        const storedTransactions = localStorage.getItem(transactionsKey);
+        if (storedTransactions) {
+          setTransactions(JSON.parse(storedTransactions));
+        } else {
+          setTransactions([]);
+        }
       }
-      const storedBudgets = localStorage.getItem('budgets');
-      if (storedBudgets) {
-        setBudgets(JSON.parse(storedBudgets));
+
+      if(budgetsKey) {
+        const storedBudgets = localStorage.getItem(budgetsKey);
+        if (storedBudgets) {
+          setBudgets(JSON.parse(storedBudgets));
+        } else {
+          setBudgets([]);
+        }
       }
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
     }
-  }, []);
+  }, [userId, getStorageKey]);
 
   useEffect(() => {
+    if (!userId) return;
     try {
-      localStorage.setItem('transactions', JSON.stringify(transactions));
-      localStorage.setItem('budgets', JSON.stringify(budgets));
+      const transactionsKey = getStorageKey('transactions');
+      const budgetsKey = getStorageKey('budgets');
+      if (transactionsKey) localStorage.setItem(transactionsKey, JSON.stringify(transactions));
+      if (budgetsKey) localStorage.setItem(budgetsKey, JSON.stringify(budgets));
     } catch (error) {
       console.error("Failed to save data to localStorage", error);
     }
-  }, [transactions, budgets]);
+  }, [transactions, budgets, userId, getStorageKey]);
 
   const addTransaction = (transaction: Omit<Transaction, 'id'>) => {
     const newTransaction: Transaction = {
@@ -40,6 +65,16 @@ export const useFinanceData = () => {
 
   const deleteTransaction = (id: string) => {
     setTransactions(prev => prev.filter(t => t.id !== id));
+  };
+  
+  const deleteUserData = (userIdToDelete: string) => {
+    try {
+      localStorage.removeItem(`transactions_${userIdToDelete}`);
+      localStorage.removeItem(`budgets_${userIdToDelete}`);
+      localStorage.removeItem(`settings_${userIdToDelete}`);
+    } catch (error) {
+       console.error("Failed to delete user data from localStorage", error);
+    }
   };
 
   const setBudget = (category: string, amount: number) => {
@@ -140,5 +175,6 @@ export const useFinanceData = () => {
     setBudget,
     deleteBudget,
     getBudgetStatus,
+    deleteUserData,
   };
 };

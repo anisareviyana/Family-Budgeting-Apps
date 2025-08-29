@@ -12,7 +12,7 @@ export interface Transaction {
   category: string;
 }
 
-export type View = 'dashboard' | 'transactions' | 'reports' | 'budget' | 'settings';
+export type View = 'dashboard' | 'transactions' | 'reports' | 'budget' | 'profile';
 
 export interface MonthlySummary {
   month: string;
@@ -36,4 +36,13 @@ export interface BudgetStatus {
 
 export interface Settings {
   currency: string;
+}
+
+export interface User {
+  email: string;
+  name: string;
+  passwordHash: string;
+  phone?: string;
+  profilePicture?: string; // base64 data URL
+  lastLogin?: string; // ISO string
 }
