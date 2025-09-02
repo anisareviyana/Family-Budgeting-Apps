@@ -10,43 +10,27 @@ import AddTransactionModal from './components/AddTransactionModal';
 import { useFinanceData } from './hooks/useFinanceData';
 import { PlusCircle } from './components/ui/Icons';
 import type { View, Transaction, Settings, User } from './types';
+import { dbGetAllUsers, dbSaveUser, dbSaveSettings, dbGetSettings, dbDeleteUserData } from './utils/db';
 
 const App: React.FC = () => {
     
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(() => localStorage.getItem('currentUser'));
-  const [users, setUsers] = useState<User[]>(() => {
-    const storedUsers = localStorage.getItem('users');
-    return storedUsers ? JSON.parse(storedUsers) : [];
-  });
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(() => sessionStorage.getItem('currentUser'));
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   const currentUser = users.find(u => u.email === currentUserEmail) || null;
   
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-      if (typeof window !== 'undefined' && window.localStorage) {
-          const storedTheme = window.localStorage.getItem(`theme_${currentUserEmail}`);
-          return (storedTheme === 'dark' || storedTheme === 'light') ? storedTheme : 'light';
-      }
-      return 'light';
-  });
-  
-  const getSettingsKey = (userId: string | null) => userId ? `settings_${userId}` : null;
-  
-  const [settings, setSettings] = useState<Settings>(() => {
-    const settingsKey = getSettingsKey(currentUserEmail);
-    if (settingsKey) {
-        const storedSettings = localStorage.getItem(settingsKey);
-        if (storedSettings) return JSON.parse(storedSettings);
-    }
-    return { currency: 'USD' };
-  });
-
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [settings, setSettings] = useState<Settings>({ currency: 'IDR' });
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
 
   const {
     transactions,
     addTransaction,
     deleteTransaction,
+    updateTransaction,
     getMonthlySummary,
     getCategoryWiseExpenses,
     getMonthlyComparisonData,
@@ -55,24 +39,49 @@ const App: React.FC = () => {
     setBudget,
     deleteBudget,
     getBudgetStatus,
-    deleteUserData
+    deleteUserData: deleteFinanceData
   } = useFinanceData(currentUserEmail);
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      setIsLoading(true);
+      try {
+        const allUsers = await dbGetAllUsers();
+        setUsers(allUsers);
+        const loggedInUserEmail = sessionStorage.getItem('currentUser');
+
+        if (loggedInUserEmail) {
+          const userSettings = await dbGetSettings(loggedInUserEmail);
+          if (userSettings) {
+            setTheme(userSettings.theme || 'light');
+            setSettings({ currency: userSettings.currency || 'IDR' });
+          }
+        }
+      } catch (e) {
+        console.error("Failed to bootstrap app", e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    bootstrap();
+  }, []);
 
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove(theme === 'light' ? 'dark' : 'light');
     root.classList.add(theme);
-    if(currentUserEmail) {
-        localStorage.setItem(`theme_${currentUserEmail}`, theme);
-    }
-  }, [theme, currentUserEmail]);
+  }, [theme]);
   
   useEffect(() => {
-    const settingsKey = getSettingsKey(currentUserEmail);
-    if(settingsKey) {
-      localStorage.setItem(settingsKey, JSON.stringify(settings));
+    const savePrefs = async () => {
+      if (currentUserEmail) {
+        await dbSaveSettings(currentUserEmail, { ...settings, theme });
+      }
+    };
+    if (!isLoading) {
+      savePrefs();
     }
-  }, [settings, currentUserEmail]);
+  }, [settings, theme, currentUserEmail, isLoading]);
 
   const toggleTheme = () => {
     setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
@@ -82,48 +91,66 @@ const App: React.FC = () => {
     setSettings(newSettings);
   };
   
-  const updateUser = useCallback((updatedUser: User) => {
-    const newUsers = users.map(u => u.email === updatedUser.email ? updatedUser : u);
-    setUsers(newUsers);
-    localStorage.setItem('users', JSON.stringify(newUsers));
+  const updateUser = useCallback(async (updatedUser: User) => {
+    await dbSaveUser(updatedUser);
+    setUsers(users.map(u => u.email === updatedUser.email ? updatedUser : u));
   }, [users]);
   
-  const handleLoginSuccess = (email: string) => {
-      const allUsers = JSON.parse(localStorage.getItem('users') || '[]') as User[];
+  const handleLoginSuccess = async (email: string) => {
+      sessionStorage.setItem('currentUser', email);
+      setCurrentUserEmail(email);
+
+      const allUsers = await dbGetAllUsers();
       setUsers(allUsers);
       
-      setCurrentUserEmail(email);
-      localStorage.setItem('currentUser', email);
-      
-      const userTheme = localStorage.getItem(`theme_${email}`);
-      setTheme(userTheme === 'dark' ? 'dark' : 'light');
-
-      const settingsKey = getSettingsKey(email);
-      const storedSettings = settingsKey ? localStorage.getItem(settingsKey) : null;
-      if (storedSettings) {
-        setSettings(JSON.parse(storedSettings));
+      const userSettings = await dbGetSettings(email);
+      if (userSettings) {
+        setTheme(userSettings.theme || 'light');
+        setSettings({ currency: userSettings.currency || 'IDR' });
       } else {
-        setSettings({ currency: 'USD' });
+        setTheme('light');
+        setSettings({ currency: 'IDR' });
+        await dbSaveSettings(email, { currency: 'IDR', theme: 'light' });
       }
+      
       setCurrentView('dashboard');
   };
 
   const handleLogout = () => {
+      sessionStorage.removeItem('currentUser');
       setCurrentUserEmail(null);
-      localStorage.removeItem('currentUser');
       setCurrentView('dashboard');
   };
   
-  const handleDeleteAccount = () => {
+  const handleDeleteAccount = async () => {
     if (!currentUserEmail) return;
     if (window.confirm('Are you sure you want to delete your account? This action is irreversible and all your data will be lost.')) {
-        deleteUserData(currentUserEmail);
+        await deleteFinanceData(currentUserEmail);
         const newUsers = users.filter(u => u.email !== currentUserEmail);
         setUsers(newUsers);
-        localStorage.setItem('users', JSON.stringify(newUsers));
         handleLogout();
     }
   };
+
+  const handleOpenEditModal = (transaction: Transaction) => {
+    setTransactionToEdit(transaction);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setTransactionToEdit(null);
+  };
+
+  const handleSaveTransaction = (transactionData: Omit<Transaction, 'id'> | Transaction) => {
+    if ('id' in transactionData && transactionData.id) {
+      updateTransaction(transactionData as Transaction);
+    } else {
+      addTransaction(transactionData as Omit<Transaction, 'id'>);
+    }
+    handleCloseModal();
+  };
+
 
   const renderView = () => {
     if (!currentUser) return null;
@@ -137,7 +164,7 @@ const App: React.FC = () => {
       case 'dashboard':
         return <Dashboard summary={getMonthlySummary(currentMonth)} categoryExpenses={getCategoryWiseExpenses(currentMonth)} monthlyComparison={getMonthlyComparisonData(currentMonth)} budgetStatus={budgetStatus} currency={currency} />;
       case 'transactions':
-        return <Transactions transactions={transactions} deleteTransaction={deleteTransaction} currency={currency} />;
+        return <Transactions transactions={transactions} deleteTransaction={deleteTransaction} currency={currency} onEditTransaction={handleOpenEditModal} />;
       case 'budget':
         return <Budget budgetStatus={budgetStatus} setBudget={setBudget} deleteBudget={deleteBudget} budgets={budgets} currency={currency} />;
       case 'reports':
@@ -148,14 +175,23 @@ const App: React.FC = () => {
         return <Dashboard summary={getMonthlySummary(currentMonth)} categoryExpenses={getCategoryWiseExpenses(currentMonth)} monthlyComparison={getMonthlyComparisonData(currentMonth)} budgetStatus={budgetStatus} currency={currency} />;
     }
   };
-
-  const handleAddTransaction = (transaction: Omit<Transaction, 'id'>) => {
-    addTransaction(transaction);
-    setIsModalOpen(false);
-  };
   
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-primary-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+            <svg className="mx-auto h-12 w-12 text-primary-500 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p className="text-xl mt-4 text-gray-700 dark:text-gray-300">Loading Your Financial Data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300">
+    <div className="min-h-screen bg-primary-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300">
       <Header 
         currentView={currentView}
         setCurrentView={setCurrentView}
@@ -179,8 +215,9 @@ const App: React.FC = () => {
             </button>
             {isModalOpen && (
               <AddTransactionModal
-                onClose={() => setIsModalOpen(false)}
-                onAddTransaction={handleAddTransaction}
+                onClose={handleCloseModal}
+                onSaveTransaction={handleSaveTransaction}
+                transactionToEdit={transactionToEdit}
               />
             )}
           </>

@@ -44,7 +44,7 @@ const MonthlyComparisonBarChart: React.FC<MonthlyComparisonBarChartProps> = ({ d
           <YAxis tickFormatter={(value) => formatCurrency(value as number, currency)} className="text-xs" />
           <Tooltip content={<CustomTooltip currency={currency} />}/>
           <Legend />
-          <Bar dataKey="income" fill="#10b981" />
+          <Bar dataKey="income" fill="#84cc16" />
           <Bar dataKey="expenses" fill="#ef4444" />
         </BarChart>
       </ResponsiveContainer>

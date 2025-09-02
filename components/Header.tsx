@@ -1,6 +1,6 @@
 import React from 'react';
 import type { View, User } from '../types';
-import { Sun, Moon, ChartPie, Rows, FileText, PiggyBank, Target, UserCircle } from './ui/Icons';
+import { Sun, Moon, ChartPie, Rows, FileText, Target, UserCircle, Home } from './ui/Icons';
 
 interface HeaderProps {
   currentView: View;
@@ -36,8 +36,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, theme, tog
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center space-x-4">
-            <PiggyBank className="h-8 w-8 text-primary-600" />
-            <h1 className="text-xl font-bold text-gray-800 dark:text-white">FinTrack</h1>
+            <Home className="h-8 w-8 text-primary-600" />
+            <h1 className="text-xl font-bold text-gray-800 dark:text-white">HomeBudget</h1>
           </div>
           <div className="flex items-center space-x-2">
             {currentUser ? (
@@ -65,6 +65,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, theme, tog
                   icon={<FileText className="h-5 w-5" />}
                   isActive={currentView === 'reports'} 
                   onClick={() => setCurrentView('reports')} 
+                />
+                <NavButton 
+                  label="Profile" 
+                  icon={<UserCircle className="h-5 w-5" />}
+                  isActive={currentView === 'profile'} 
+                  onClick={() => setCurrentView('profile')} 
                 />
               </nav>
             ) : null}

@@ -1,31 +1,60 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { TransactionType } from '../types';
 import type { Transaction } from '../types';
-import { INCOME_CATEGORIES, EXPENSE_CATEGORIES } from '../constants';
+import { INCOME_CATEGORIES, EXPENSE_CATEGORIES, COMMON_DESCRIPTIONS } from '../constants';
 
 interface AddTransactionModalProps {
   onClose: () => void;
-  onAddTransaction: (transaction: Omit<Transaction, 'id'>) => void;
+  onSaveTransaction: (transaction: Omit<Transaction, 'id'> | Transaction) => void;
+  transactionToEdit?: Transaction | null;
 }
 
-const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ onClose, onAddTransaction }) => {
+const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ onClose, onSaveTransaction, transactionToEdit }) => {
+  const isEditMode = !!transactionToEdit;
+
   const [type, setType] = useState<TransactionType>(TransactionType.EXPENSE);
   const [amount, setAmount] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [category, setCategory] = useState<string>('');
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [categories, setCategories] = useState<string[]>(EXPENSE_CATEGORIES);
+  const [descriptionSuggestions, setDescriptionSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
-    if (type === TransactionType.EXPENSE) {
-      setCategories(EXPENSE_CATEGORIES);
-      setCategory(EXPENSE_CATEGORIES[0]);
+    if (isEditMode && transactionToEdit) {
+      setType(transactionToEdit.type);
+      setAmount(String(transactionToEdit.amount));
+      setDescription(transactionToEdit.description);
+      setCategory(transactionToEdit.category);
+      setDate(transactionToEdit.date);
     } else {
-      setCategories(INCOME_CATEGORIES);
-      setCategory(INCOME_CATEGORIES[0]);
+      // Reset form for "Add" mode
+      setType(TransactionType.EXPENSE);
+      setAmount('');
+      setDescription('');
+      setCategory(EXPENSE_CATEGORIES[0]);
+      setDate(new Date().toISOString().split('T')[0]);
     }
-  }, [type]);
+  }, [transactionToEdit, isEditMode]);
+
+  useEffect(() => {
+    const newCategories = type === TransactionType.EXPENSE ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+    setCategories(newCategories);
+    
+    if (!newCategories.includes(category)) {
+      setCategory(newCategories[0]);
+    }
+  }, [type, category]);
+
+  useEffect(() => {
+    if (category in COMMON_DESCRIPTIONS) {
+      setDescriptionSuggestions(COMMON_DESCRIPTIONS[category]);
+    } else {
+      setDescriptionSuggestions([]);
+    }
+  }, [category]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,20 +62,26 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ onClose, onAd
       alert("Please fill all fields.");
       return;
     }
-    onAddTransaction({
+    const transactionData = {
       amount: parseFloat(amount),
       description,
       category,
       date,
       type
-    });
+    };
+
+    if (isEditMode && transactionToEdit) {
+      onSaveTransaction({ ...transactionData, id: transactionToEdit.id });
+    } else {
+      onSaveTransaction(transactionData);
+    }
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <h2 className="text-xl font-bold text-gray-800 dark:text-white">Add New Transaction</h2>
+          <h2 className="text-xl font-bold text-gray-800 dark:text-white">{isEditMode ? 'Edit Transaction' : 'Add New Transaction'}</h2>
           
           <div className="flex border border-gray-300 dark:border-gray-600 rounded-lg p-1">
             <button
@@ -88,7 +123,13 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ onClose, onAd
               placeholder="e.g., Coffee, Salary"
               className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
               required
+              list="description-suggestions"
             />
+            <datalist id="description-suggestions">
+              {descriptionSuggestions.map(suggestion => (
+                <option key={suggestion} value={suggestion} />
+              ))}
+            </datalist>
           </div>
           
           <div>
@@ -118,7 +159,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ onClose, onAd
           
           <div className="flex justify-end space-x-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition">Cancel</button>
-            <button type="submit" className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition">Add Transaction</button>
+            <button type="submit" className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition">{isEditMode ? 'Save Changes' : 'Add Transaction'}</button>
           </div>
         </form>
       </div>

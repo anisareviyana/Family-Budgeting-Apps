@@ -1,93 +1,77 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Transaction, MonthlySummary, Budget, BudgetStatus } from '../types';
 import { TransactionType } from '../types';
+import {
+  dbGetTransactions,
+  dbAddTransaction,
+  dbDeleteTransaction,
+  dbUpdateTransaction,
+  dbGetBudgets,
+  dbSetBudget,
+  dbDeleteBudget,
+  dbDeleteUserData as dbDeleteAllUserData
+} from '../utils/db';
 
 export const useFinanceData = (userId: string | null) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
 
-  const getStorageKey = useCallback((key: string) => {
-    if (!userId) return null;
-    return `${key}_${userId}`;
+  useEffect(() => {
+    async function loadData() {
+      if (!userId) {
+        setTransactions([]);
+        setBudgets([]);
+        return;
+      }
+      try {
+        const userTransactions = await dbGetTransactions(userId);
+        const userBudgets = await dbGetBudgets(userId);
+        setTransactions(userTransactions);
+        setBudgets(userBudgets);
+      } catch (error) {
+        console.error("Failed to load data from IndexedDB", error);
+      }
+    }
+    loadData();
   }, [userId]);
 
-  useEffect(() => {
-    if (!userId) {
-      setTransactions([]);
-      setBudgets([]);
-      return;
-    }
-    try {
-      const transactionsKey = getStorageKey('transactions');
-      const budgetsKey = getStorageKey('budgets');
-
-      if(transactionsKey) {
-        const storedTransactions = localStorage.getItem(transactionsKey);
-        if (storedTransactions) {
-          setTransactions(JSON.parse(storedTransactions));
-        } else {
-          setTransactions([]);
-        }
-      }
-
-      if(budgetsKey) {
-        const storedBudgets = localStorage.getItem(budgetsKey);
-        if (storedBudgets) {
-          setBudgets(JSON.parse(storedBudgets));
-        } else {
-          setBudgets([]);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load data from localStorage", error);
-    }
-  }, [userId, getStorageKey]);
-
-  useEffect(() => {
+  const addTransaction = async (transaction: Omit<Transaction, 'id'>) => {
     if (!userId) return;
-    try {
-      const transactionsKey = getStorageKey('transactions');
-      const budgetsKey = getStorageKey('budgets');
-      if (transactionsKey) localStorage.setItem(transactionsKey, JSON.stringify(transactions));
-      if (budgetsKey) localStorage.setItem(budgetsKey, JSON.stringify(budgets));
-    } catch (error) {
-      console.error("Failed to save data to localStorage", error);
-    }
-  }, [transactions, budgets, userId, getStorageKey]);
-
-  const addTransaction = (transaction: Omit<Transaction, 'id'>) => {
     const newTransaction: Transaction = {
       ...transaction,
       id: new Date().toISOString() + Math.random(),
     };
-    setTransactions(prev => [...prev, newTransaction].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    await dbAddTransaction(newTransaction, userId);
+    const userTransactions = await dbGetTransactions(userId);
+    setTransactions(userTransactions);
   };
 
-  const deleteTransaction = (id: string) => {
+  const deleteTransaction = async (id: string) => {
+    if (!userId) return;
+    await dbDeleteTransaction(id);
     setTransactions(prev => prev.filter(t => t.id !== id));
   };
   
-  const deleteUserData = (userIdToDelete: string) => {
-    try {
-      localStorage.removeItem(`transactions_${userIdToDelete}`);
-      localStorage.removeItem(`budgets_${userIdToDelete}`);
-      localStorage.removeItem(`settings_${userIdToDelete}`);
-    } catch (error) {
-       console.error("Failed to delete user data from localStorage", error);
-    }
+  const updateTransaction = async (transaction: Transaction) => {
+    if (!userId) return;
+    await dbUpdateTransaction(transaction, userId);
+    setTransactions(prev => prev.map(t => (t.id === transaction.id ? transaction : t)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
   };
 
-  const setBudget = (category: string, amount: number) => {
-    setBudgets(prev => {
-      const existing = prev.find(b => b.category === category);
-      if (existing) {
-        return prev.map(b => b.category === category ? { ...b, amount } : b);
-      }
-      return [...prev, { category, amount }];
-    });
+  const deleteUserData = async (userIdToDelete: string) => {
+    await dbDeleteAllUserData(userIdToDelete);
   };
 
-  const deleteBudget = (category: string) => {
+  const setBudget = async (category: string, amount: number) => {
+    if (!userId) return;
+    await dbSetBudget({ category, amount }, userId);
+    const userBudgets = await dbGetBudgets(userId);
+    setBudgets(userBudgets);
+  };
+
+  const deleteBudget = async (category: string) => {
+    if (!userId) return;
+    await dbDeleteBudget(category, userId);
     setBudgets(prev => prev.filter(b => b.category !== category));
   };
 
@@ -167,6 +151,7 @@ export const useFinanceData = (userId: string | null) => {
     transactions,
     addTransaction,
     deleteTransaction,
+    updateTransaction,
     getMonthlySummary,
     getCategoryWiseExpenses,
     getMonthlyComparisonData,

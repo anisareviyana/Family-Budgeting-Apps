@@ -8,7 +8,7 @@ interface CategoryPieChartProps {
   currency: string;
 }
 
-const COLORS = ['#10b981', '#3b82f6', '#ef4444', '#f97316', '#8b5cf6', '#ec4899', '#f59e0b', '#14b8a6', '#6366f1', '#d946ef'];
+const COLORS = ['#84cc16', '#facc15', '#3b82f6', '#ef4444', '#f97316', '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1', '#d946ef'];
 
 interface CustomTooltipProps {
   active?: boolean;

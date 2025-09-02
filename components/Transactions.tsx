@@ -1,9 +1,10 @@
 
+
 import React, { useState, useMemo } from 'react';
 import type { Transaction } from '../types';
 import { TransactionType } from '../types';
 import Card from './ui/Card';
-import { Trash } from './ui/Icons';
+import { Trash, Edit } from './ui/Icons';
 import { INCOME_CATEGORIES, EXPENSE_CATEGORIES } from '../constants';
 import { formatCurrency } from '../utils/formatting';
 
@@ -11,9 +12,10 @@ interface TransactionsProps {
   transactions: Transaction[];
   deleteTransaction: (id: string) => void;
   currency: string;
+  onEditTransaction: (transaction: Transaction) => void;
 }
 
-const Transactions: React.FC<TransactionsProps> = ({ transactions, deleteTransaction, currency }) => {
+const Transactions: React.FC<TransactionsProps> = ({ transactions, deleteTransaction, currency, onEditTransaction }) => {
   const [filterType, setFilterType] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -80,9 +82,14 @@ const Transactions: React.FC<TransactionsProps> = ({ transactions, deleteTransac
                     {t.type === TransactionType.INCOME ? '+' : '-'} {formatCurrency(t.amount, currency)}
                   </td>
                   <td className="p-3 text-center">
-                    <button onClick={() => deleteTransaction(t.id)} className="text-gray-500 hover:text-red-600 dark:hover:text-red-400">
-                      <Trash className="h-5 w-5" />
-                    </button>
+                    <div className="flex justify-center items-center space-x-2">
+                        <button onClick={() => onEditTransaction(t)} className="text-gray-500 hover:text-primary-600 dark:hover:text-primary-400" aria-label="Edit transaction">
+                            <Edit className="h-5 w-5" />
+                        </button>
+                        <button onClick={() => deleteTransaction(t.id)} className="text-gray-500 hover:text-red-600 dark:hover:text-red-400" aria-label="Delete transaction">
+                            <Trash className="h-5 w-5" />
+                        </button>
+                    </div>
                   </td>
                 </tr>
               ))
