@@ -1,6 +1,6 @@
 import React from 'react';
 import type { View, User } from '../types';
-import { Sun, Moon, ChartPie, Rows, FileText, Target, UserCircle, Home } from './ui/Icons';
+import { Sun, Moon, ChartPie, Rows, FileText, Target, UserCircle, Home, Repeat } from './ui/Icons';
 
 interface HeaderProps {
   currentView: View;
@@ -53,6 +53,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, theme, tog
                   icon={<Rows className="h-5 w-5" />}
                   isActive={currentView === 'transactions'} 
                   onClick={() => setCurrentView('transactions')} 
+                />
+                 <NavButton 
+                  label="Recurring" 
+                  icon={<Repeat className="h-5 w-5" />}
+                  isActive={currentView === 'recurring'} 
+                  onClick={() => setCurrentView('recurring')} 
                 />
                 <NavButton 
                   label="Budget" 

@@ -1,4 +1,4 @@
-import type { User, Transaction, Budget, Settings } from '../types';
+import type { User, Transaction, Budget, Settings, RecurringTransaction } from '../types';
 
 const DB_NAME = 'HomeBudgetDB';
 const DB_VERSION = 1;
@@ -6,6 +6,8 @@ const USERS_STORE = 'users';
 const TRANSACTIONS_STORE = 'transactions';
 const BUDGETS_STORE = 'budgets';
 const SETTINGS_STORE = 'settings';
+const RECURRING_TRANSACTIONS_STORE = 'recurring_transactions';
+
 
 let db: IDBDatabase;
 
@@ -44,6 +46,10 @@ function openDB(): Promise<IDBDatabase> {
        if (!dbInstance.objectStoreNames.contains(SETTINGS_STORE)) {
         // userId is the key
         dbInstance.createObjectStore(SETTINGS_STORE, { keyPath: 'userId' });
+      }
+      if (!dbInstance.objectStoreNames.contains(RECURRING_TRANSACTIONS_STORE)) {
+        const store = dbInstance.createObjectStore(RECURRING_TRANSACTIONS_STORE, { keyPath: 'id' });
+        store.createIndex('userId', 'userId', { unique: false });
       }
     };
   });
@@ -163,6 +169,45 @@ export const dbDeleteBudget = (category: string, userId: string): Promise<void> 
   });
 };
 
+// Recurring Transaction Operations
+export const dbGetRecurringTransactions = (userId: string): Promise<RecurringTransaction[]> => {
+  return performTransaction(RECURRING_TRANSACTIONS_STORE, 'readonly', (store) => {
+    return new Promise((resolve) => {
+      const index = store.index('userId');
+      const request = index.getAll(userId);
+      request.onsuccess = () => resolve(request.result.sort((a: RecurringTransaction, b: RecurringTransaction) => new Date(a.nextDueDate).getTime() - new Date(b.nextDueDate).getTime()));
+    });
+  });
+};
+
+export const dbAddRecurringTransaction = (transaction: RecurringTransaction, userId: string): Promise<void> => {
+  return performTransaction(RECURRING_TRANSACTIONS_STORE, 'readwrite', (store) => {
+    return new Promise((resolve) => {
+      const request = store.add({ ...transaction, userId });
+      request.onsuccess = () => resolve();
+    });
+  });
+};
+
+export const dbUpdateRecurringTransaction = (transaction: RecurringTransaction, userId: string): Promise<void> => {
+  return performTransaction(RECURRING_TRANSACTIONS_STORE, 'readwrite', (store) => {
+    return new Promise((resolve) => {
+      const request = store.put({ ...transaction, userId });
+      request.onsuccess = () => resolve();
+    });
+  });
+};
+
+export const dbDeleteRecurringTransaction = (transactionId: string): Promise<void> => {
+  return performTransaction(RECURRING_TRANSACTIONS_STORE, 'readwrite', (store) => {
+    return new Promise((resolve) => {
+      const request = store.delete(transactionId);
+      request.onsuccess = () => resolve();
+    });
+  });
+};
+
+
 // Settings operations
 export interface UserSettings extends Settings {
     theme: 'light' | 'dark';
@@ -195,6 +240,11 @@ export const dbDeleteUserData = async (userId: string): Promise<void> => {
   const budgets = await dbGetBudgets(userId);
   for (const b of budgets) {
     await dbDeleteBudget(b.category, userId);
+  }
+
+  const recurringTransactions = await dbGetRecurringTransactions(userId);
+  for (const r of recurringTransactions) {
+    await dbDeleteRecurringTransaction(r.id);
   }
 
   await performTransaction(SETTINGS_STORE, 'readwrite', (store) => {

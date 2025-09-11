@@ -10,9 +10,24 @@ export interface Transaction {
   amount: number;
   type: TransactionType;
   category: string;
+  recurringTransactionId?: string;
 }
 
-export type View = 'dashboard' | 'transactions' | 'reports' | 'budget' | 'profile';
+export type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+export interface RecurringTransaction {
+  id: string;
+  startDate: string; // YYYY-MM-DD
+  description: string;
+  amount: number;
+  type: TransactionType;
+  category: string;
+  frequency: Frequency;
+  endDate?: string; // YYYY-MM-DD
+  nextDueDate: string; // YYYY-MM-DD
+}
+
+export type View = 'dashboard' | 'transactions' | 'reports' | 'budget' | 'profile' | 'recurring';
 
 export interface MonthlySummary {
   month: string;

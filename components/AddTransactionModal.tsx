@@ -1,6 +1,4 @@
-
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { TransactionType } from '../types';
 import type { Transaction } from '../types';
 import { INCOME_CATEGORIES, EXPENSE_CATEGORIES, COMMON_DESCRIPTIONS } from '../constants';
@@ -9,9 +7,10 @@ interface AddTransactionModalProps {
   onClose: () => void;
   onSaveTransaction: (transaction: Omit<Transaction, 'id'> | Transaction) => void;
   transactionToEdit?: Transaction | null;
+  currency: string;
 }
 
-const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ onClose, onSaveTransaction, transactionToEdit }) => {
+const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ onClose, onSaveTransaction, transactionToEdit, currency }) => {
   const isEditMode = !!transactionToEdit;
 
   const [type, setType] = useState<TransactionType>(TransactionType.EXPENSE);
@@ -21,6 +20,14 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ onClose, onSa
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [categories, setCategories] = useState<string[]>(EXPENSE_CATEGORIES);
   const [descriptionSuggestions, setDescriptionSuggestions] = useState<string[]>([]);
+
+  const currencySymbol = useMemo(() => {
+    try {
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency, currencyDisplay: 'narrowSymbol' }).formatToParts(1).find(part => part.type === 'currency')?.value || currency;
+    } catch {
+      return '$';
+    }
+  }, [currency]);
 
   useEffect(() => {
     if (isEditMode && transactionToEdit) {
@@ -102,15 +109,20 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ onClose, onSa
           
           <div>
             <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount</label>
-            <input
-              id="amount"
-              type="number"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-              placeholder="0.00"
-              className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              required
-            />
+            <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center">
+                    <span className="text-gray-500 dark:text-gray-400 sm:text-sm">{currencySymbol}</span>
+                </div>
+                <input
+                    id="amount"
+                    type="number"
+                    value={amount}
+                    onChange={e => setAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="block w-full pl-8 pr-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    required
+                />
+            </div>
           </div>
 
           <div>

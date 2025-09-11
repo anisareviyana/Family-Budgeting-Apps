@@ -7,9 +7,11 @@ import Budget from './components/Budget';
 import ProfilePage from './components/ProfilePage';
 import Auth from './components/Auth';
 import AddTransactionModal from './components/AddTransactionModal';
+import AddRecurringTransactionModal from './components/AddRecurringTransactionModal';
+import RecurringTransactionsPage from './components/RecurringTransactionsPage';
 import { useFinanceData } from './hooks/useFinanceData';
 import { PlusCircle } from './components/ui/Icons';
-import type { View, Transaction, Settings, User } from './types';
+import type { View, Transaction, Settings, User, RecurringTransaction } from './types';
 import { dbGetAllUsers, dbSaveUser, dbSaveSettings, dbGetSettings, dbDeleteUserData } from './utils/db';
 
 const App: React.FC = () => {
@@ -23,8 +25,12 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [settings, setSettings] = useState<Settings>({ currency: 'IDR' });
   const [currentView, setCurrentView] = useState<View>('dashboard');
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
+
+  const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
+  const [recurringTransactionToEdit, setRecurringTransactionToEdit] = useState<RecurringTransaction | null>(null);
 
   const {
     transactions,
@@ -39,7 +45,11 @@ const App: React.FC = () => {
     setBudget,
     deleteBudget,
     getBudgetStatus,
-    deleteUserData: deleteFinanceData
+    deleteUserData: deleteFinanceData,
+    recurringTransactions,
+    addRecurringTransaction,
+    updateRecurringTransaction,
+    deleteRecurringTransaction
   } = useFinanceData(currentUserEmail);
 
   useEffect(() => {
@@ -151,6 +161,26 @@ const App: React.FC = () => {
     handleCloseModal();
   };
 
+  // Recurring Modal Handlers
+  const handleOpenRecurringModal = (recTransaction?: RecurringTransaction) => {
+    setRecurringTransactionToEdit(recTransaction || null);
+    setIsRecurringModalOpen(true);
+  };
+
+  const handleCloseRecurringModal = () => {
+    setIsRecurringModalOpen(false);
+    setRecurringTransactionToEdit(null);
+  };
+
+  const handleSaveRecurringTransaction = (recTransactionData: Omit<RecurringTransaction, 'id'> | RecurringTransaction) => {
+    if ('id' in recTransactionData && recTransactionData.id) {
+      updateRecurringTransaction(recTransactionData as RecurringTransaction);
+    } else {
+      addRecurringTransaction(recTransactionData as Omit<RecurringTransaction, 'id'>);
+    }
+    handleCloseRecurringModal();
+  };
+
 
   const renderView = () => {
     if (!currentUser) return null;
@@ -165,6 +195,8 @@ const App: React.FC = () => {
         return <Dashboard summary={getMonthlySummary(currentMonth)} categoryExpenses={getCategoryWiseExpenses(currentMonth)} monthlyComparison={getMonthlyComparisonData(currentMonth)} budgetStatus={budgetStatus} currency={currency} />;
       case 'transactions':
         return <Transactions transactions={transactions} deleteTransaction={deleteTransaction} currency={currency} onEditTransaction={handleOpenEditModal} />;
+      case 'recurring':
+        return <RecurringTransactionsPage recurringTransactions={recurringTransactions} onAdd={() => handleOpenRecurringModal()} onEdit={handleOpenRecurringModal} onDelete={deleteRecurringTransaction} currency={currency} />;
       case 'budget':
         return <Budget budgetStatus={budgetStatus} setBudget={setBudget} deleteBudget={deleteBudget} budgets={budgets} currency={currency} />;
       case 'reports':
@@ -218,6 +250,15 @@ const App: React.FC = () => {
                 onClose={handleCloseModal}
                 onSaveTransaction={handleSaveTransaction}
                 transactionToEdit={transactionToEdit}
+                currency={settings.currency}
+              />
+            )}
+            {isRecurringModalOpen && (
+              <AddRecurringTransactionModal
+                onClose={handleCloseRecurringModal}
+                onSaveRecurringTransaction={handleSaveRecurringTransaction}
+                recurringTransactionToEdit={recurringTransactionToEdit}
+                currency={settings.currency}
               />
             )}
           </>

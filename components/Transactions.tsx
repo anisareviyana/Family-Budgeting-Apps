@@ -1,10 +1,8 @@
-
-
 import React, { useState, useMemo } from 'react';
 import type { Transaction } from '../types';
 import { TransactionType } from '../types';
 import Card from './ui/Card';
-import { Trash, Edit } from './ui/Icons';
+import { Trash, Edit, Repeat } from './ui/Icons';
 import { INCOME_CATEGORIES, EXPENSE_CATEGORIES } from '../constants';
 import { formatCurrency } from '../utils/formatting';
 
@@ -19,22 +17,50 @@ const Transactions: React.FC<TransactionsProps> = ({ transactions, deleteTransac
   const [filterType, setFilterType] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [filterPeriod, setFilterPeriod] = useState<string>('all');
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
       const typeMatch = filterType === 'all' || t.type === filterType;
       const categoryMatch = filterCategory === 'all' || t.category === filterCategory;
       const searchMatch = searchTerm === '' || t.description.toLowerCase().includes(searchTerm.toLowerCase());
-      return typeMatch && categoryMatch && searchMatch;
+
+      // Period filter logic
+      let periodMatch = true;
+      if (filterPeriod !== 'all') {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1; // 1-12
+        
+        const transactionYear = parseInt(t.date.substring(0, 4), 10);
+        const transactionMonth = parseInt(t.date.substring(5, 7), 10);
+
+        switch (filterPeriod) {
+          case 'this-month':
+            periodMatch = transactionYear === currentYear && transactionMonth === currentMonth;
+            break;
+          case 'last-month':
+            const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const lastMonthYear = lastMonthDate.getFullYear();
+            const lastMonth = lastMonthDate.getMonth() + 1;
+            periodMatch = transactionYear === lastMonthYear && transactionMonth === lastMonth;
+            break;
+          case 'this-year':
+            periodMatch = transactionYear === currentYear;
+            break;
+        }
+      }
+      
+      return typeMatch && categoryMatch && searchMatch && periodMatch;
     });
-  }, [transactions, filterType, filterCategory, searchTerm]);
+  }, [transactions, filterType, filterCategory, searchTerm, filterPeriod]);
 
   const allCategories = ['all', ...new Set([...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES])];
 
   return (
     <Card>
       <h2 className="text-2xl font-bold mb-4">All Transactions</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
         <input
           type="text"
           placeholder="Search descriptions..."
@@ -42,6 +68,16 @@ const Transactions: React.FC<TransactionsProps> = ({ transactions, deleteTransac
           onChange={e => setSearchTerm(e.target.value)}
           className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
         />
+        <select
+          value={filterPeriod}
+          onChange={e => setFilterPeriod(e.target.value)}
+          className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+        >
+          <option value="all">All Time</option>
+          <option value="this-month">This Month</option>
+          <option value="last-month">Last Month</option>
+          <option value="this-year">This Year</option>
+        </select>
         <select
           value={filterType}
           onChange={e => setFilterType(e.target.value)}
@@ -76,7 +112,13 @@ const Transactions: React.FC<TransactionsProps> = ({ transactions, deleteTransac
               filteredTransactions.map(t => (
                 <tr key={t.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                   <td className="p-3">{t.date}</td>
-                  <td className="p-3">{t.description}</td>
+                  <td className="p-3">
+                    <div className="flex items-center space-x-2">
+                        <span>{t.description}</span>
+                        {/* FIX: Replaced title prop on SVG component with a wrapping span to provide a tooltip, resolving a TypeScript error. */}
+                        {t.recurringTransactionId && <span title="Recurring"><Repeat className="h-4 w-4 text-gray-400" /></span>}
+                    </div>
+                  </td>
                   <td className="p-3"><span className="px-2 py-1 text-xs rounded-full bg-gray-200 dark:bg-gray-700">{t.category}</span></td>
                   <td className={`p-3 text-right font-medium ${t.type === TransactionType.INCOME ? 'text-green-500' : 'text-red-500'}`}>
                     {t.type === TransactionType.INCOME ? '+' : '-'} {formatCurrency(t.amount, currency)}

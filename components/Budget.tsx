@@ -34,6 +34,14 @@ const Budget: React.FC<BudgetProps> = ({ budgetStatus, setBudget, deleteBudget, 
     }
   }, [availableCategories, newBudgetCategory]);
 
+  const currencySymbol = useMemo(() => {
+    try {
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency, currencyDisplay: 'narrowSymbol' }).formatToParts(1).find(part => part.type === 'currency')?.value || currency;
+    } catch {
+      return '$';
+    }
+  }, [currency]);
+
 
   const handleSetBudget = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,17 +84,22 @@ const Budget: React.FC<BudgetProps> = ({ budgetStatus, setBudget, deleteBudget, 
           </div>
           <div>
             <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Monthly Budget</label>
-            <input
-              id="amount"
-              type="number"
-              value={newBudgetAmount}
-              onChange={e => setNewBudgetAmount(e.target.value)}
-              placeholder="0.00"
-              min="0.01"
-              step="0.01"
-              className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              required
-            />
+            <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center">
+                    <span className="text-gray-500 dark:text-gray-400 sm:text-sm">{currencySymbol}</span>
+                </div>
+                <input
+                    id="amount"
+                    type="number"
+                    value={newBudgetAmount}
+                    onChange={e => setNewBudgetAmount(e.target.value)}
+                    placeholder="0.00"
+                    min="0.01"
+                    step="0.01"
+                    className="block w-full pl-8 pr-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    required
+                />
+            </div>
           </div>
           <button type="submit" disabled={availableCategories.length === 0} className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed">Set Budget</button>
         </form>

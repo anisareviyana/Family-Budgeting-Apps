@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Transaction, MonthlySummary, Budget, BudgetStatus } from '../types';
+import type { Transaction, MonthlySummary, Budget, BudgetStatus, RecurringTransaction } from '../types';
 import { TransactionType } from '../types';
 import {
   dbGetTransactions,
@@ -9,31 +9,100 @@ import {
   dbGetBudgets,
   dbSetBudget,
   dbDeleteBudget,
-  dbDeleteUserData as dbDeleteAllUserData
+  dbDeleteUserData as dbDeleteAllUserData,
+  dbGetRecurringTransactions,
+  dbAddRecurringTransaction,
+  dbUpdateRecurringTransaction,
+  dbDeleteRecurringTransaction
 } from '../utils/db';
 
 export const useFinanceData = (userId: string | null) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([]);
 
   useEffect(() => {
     async function loadData() {
       if (!userId) {
         setTransactions([]);
         setBudgets([]);
+        setRecurringTransactions([]);
         return;
       }
       try {
-        const userTransactions = await dbGetTransactions(userId);
+        let userTransactions = await dbGetTransactions(userId);
         const userBudgets = await dbGetBudgets(userId);
+        let userRecurring = await dbGetRecurringTransactions(userId);
+        
+        // Generate any missed transactions
+        const { generated, updatedRules } = await generateMissedTransactions(userRecurring, userId);
+        
+        if (generated.length > 0) {
+          userTransactions = [...userTransactions, ...generated].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          userRecurring = updatedRules;
+        }
+
         setTransactions(userTransactions);
         setBudgets(userBudgets);
+        setRecurringTransactions(userRecurring);
+
       } catch (error) {
         console.error("Failed to load data from IndexedDB", error);
       }
     }
     loadData();
   }, [userId]);
+
+  const generateMissedTransactions = async (
+    rules: RecurringTransaction[],
+    userId: string
+  ): Promise<{ generated: Transaction[], updatedRules: RecurringTransaction[] }> => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize to start of day
+    
+    const generated: Transaction[] = [];
+    const updatedRules = [...rules];
+    let hasChanges = false;
+
+    for (let i = 0; i < updatedRules.length; i++) {
+        let rule = { ...updatedRules[i] };
+        let nextDueDate = new Date(rule.nextDueDate + 'T00:00:00');
+        const endDate = rule.endDate ? new Date(rule.endDate + 'T00:00:00') : null;
+
+        while (nextDueDate <= today && (!endDate || nextDueDate <= endDate)) {
+            hasChanges = true;
+            // Generate a transaction for this due date
+            const newTransaction: Transaction = {
+                id: new Date().toISOString() + Math.random(),
+                date: nextDueDate.toISOString().split('T')[0],
+                description: rule.description,
+                amount: rule.amount,
+                type: rule.type,
+                category: rule.category,
+                recurringTransactionId: rule.id,
+            };
+            await dbAddTransaction(newTransaction, userId);
+            generated.push(newTransaction);
+
+            // Calculate the *next* due date
+            switch (rule.frequency) {
+                case 'daily': nextDueDate.setDate(nextDueDate.getDate() + 1); break;
+                case 'weekly': nextDueDate.setDate(nextDueDate.getDate() + 7); break;
+                case 'monthly': nextDueDate.setMonth(nextDueDate.getMonth() + 1); break;
+                case 'yearly': nextDueDate.setFullYear(nextDueDate.getFullYear() + 1); break;
+            }
+        }
+        
+        // Update the rule with the new nextDueDate
+        const newNextDueDateString = nextDueDate.toISOString().split('T')[0];
+        if (rule.nextDueDate !== newNextDueDateString) {
+            rule.nextDueDate = newNextDueDateString;
+            await dbUpdateRecurringTransaction(rule, userId);
+            updatedRules[i] = rule;
+        }
+    }
+    return { generated, updatedRules: hasChanges ? await dbGetRecurringTransactions(userId) : rules };
+  }
 
   const addTransaction = async (transaction: Omit<Transaction, 'id'>) => {
     if (!userId) return;
@@ -42,8 +111,7 @@ export const useFinanceData = (userId: string | null) => {
       id: new Date().toISOString() + Math.random(),
     };
     await dbAddTransaction(newTransaction, userId);
-    const userTransactions = await dbGetTransactions(userId);
-    setTransactions(userTransactions);
+    setTransactions(prev => [newTransaction, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
   };
 
   const deleteTransaction = async (id: string) => {
@@ -58,6 +126,40 @@ export const useFinanceData = (userId: string | null) => {
     setTransactions(prev => prev.map(t => (t.id === transaction.id ? transaction : t)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
   };
 
+  const addRecurringTransaction = async (recTransaction: Omit<RecurringTransaction, 'id'>) => {
+    if (!userId) return;
+    const newRecTransaction: RecurringTransaction = {
+      ...recTransaction,
+      id: new Date().toISOString() + Math.random(),
+    };
+    await dbAddRecurringTransaction(newRecTransaction, userId);
+    setRecurringTransactions(await dbGetRecurringTransactions(userId));
+    // Trigger a check to generate transactions if start date is in the past
+    const { generated } = await generateMissedTransactions([newRecTransaction], userId);
+    if (generated.length > 0) {
+      setTransactions(await dbGetTransactions(userId));
+    }
+  };
+
+  const updateRecurringTransaction = async (recTransaction: RecurringTransaction) => {
+    if (!userId) return;
+    await dbUpdateRecurringTransaction(recTransaction, userId);
+    const updatedRules = await dbGetRecurringTransactions(userId);
+    setRecurringTransactions(updatedRules);
+    // Trigger a check to generate transactions
+    const { generated } = await generateMissedTransactions(updatedRules, userId);
+    if (generated.length > 0) {
+      setTransactions(await dbGetTransactions(userId));
+    }
+  };
+
+  const deleteRecurringTransaction = async (id: string) => {
+    if (!userId) return;
+    await dbDeleteRecurringTransaction(id);
+    setRecurringTransactions(prev => prev.filter(rt => rt.id !== id));
+  };
+
+
   const deleteUserData = async (userIdToDelete: string) => {
     await dbDeleteAllUserData(userIdToDelete);
   };
@@ -65,8 +167,7 @@ export const useFinanceData = (userId: string | null) => {
   const setBudget = async (category: string, amount: number) => {
     if (!userId) return;
     await dbSetBudget({ category, amount }, userId);
-    const userBudgets = await dbGetBudgets(userId);
-    setBudgets(userBudgets);
+    setBudgets(await dbGetBudgets(userId));
   };
 
   const deleteBudget = async (category: string) => {
@@ -161,5 +262,9 @@ export const useFinanceData = (userId: string | null) => {
     deleteBudget,
     getBudgetStatus,
     deleteUserData,
+    recurringTransactions,
+    addRecurringTransaction,
+    updateRecurringTransaction,
+    deleteRecurringTransaction,
   };
 };
