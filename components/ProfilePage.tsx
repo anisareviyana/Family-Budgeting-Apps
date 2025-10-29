@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import Card from './ui/Card';
-import { UserCircle, Camera, Key, ShieldCheck, LogOut, Trash } from './ui/Icons';
+import { UserCircle, Camera, Key, ShieldCheck, LogOut, Trash, X } from './ui/Icons';
 import type { User, Settings } from '../types';
 import { CURRENCIES } from '../constants';
 
@@ -44,6 +44,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser, theme, on
       reader.readAsDataURL(file);
     }
   };
+
+  const handlePictureDelete = () => {
+    onUpdateUser({ ...user, profilePicture: undefined });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
   
   const handlePasswordChange = (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,11 +84,24 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser, theme, on
       <Card className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6">
         <div className="relative">
           {user.profilePicture ? (
-            <img src={user.profilePicture} alt="Profile" className="h-24 w-24 rounded-full object-cover ring-4 ring-primary-200 dark:ring-primary-800" />
+            <>
+              <img src={user.profilePicture} alt="Profile" className="h-24 w-24 rounded-full object-cover ring-4 ring-primary-200 dark:ring-primary-800" />
+              <button 
+                onClick={handlePictureDelete}
+                className="absolute top-0 right-0 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 transition-transform transform hover:scale-110"
+                title="Remove profile picture"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </>
           ) : (
             <UserCircle className="h-24 w-24 text-gray-400" />
           )}
-          <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-0 right-0 bg-primary-600 text-white p-2 rounded-full hover:bg-primary-700 transition-transform transform hover:scale-110">
+          <button 
+            onClick={() => fileInputRef.current?.click()} 
+            className={`absolute bottom-0 ${user.profilePicture ? 'left-0' : 'right-0'} bg-primary-600 text-white p-2 rounded-full hover:bg-primary-700 transition-transform transform hover:scale-110`}
+            title={user.profilePicture ? "Change profile picture" : "Add profile picture"}
+          >
             <Camera className="h-4 w-4" />
           </button>
           <input type="file" ref={fileInputRef} onChange={handlePictureChange} accept="image/*" className="hidden" />
